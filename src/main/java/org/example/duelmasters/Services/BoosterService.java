@@ -1,0 +1,151 @@
+package org.example.duelmasters.Services;
+
+import jakarta.transaction.Transactional;
+import org.example.duelmasters.DTOs.BuyBoosterRequest;
+import org.example.duelmasters.DTOs.CardResponse;
+import org.example.duelmasters.Models.*;
+import org.example.duelmasters.Repositories.*;
+import org.example.duelmasters.Utils.AuditAction;
+import org.example.duelmasters.Utils.RandomOrg;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
+
+@Service
+public class BoosterService {
+
+    private final int commonChance;
+    private final CardRepository cardRepository;
+    private final CollectionRepository collectionRepository;
+    private final UserRepository userRepository;
+    private final BoosterRepository boosterRepository;
+    private final AuditLogRepository auditLogRepository;
+    private final RandomOrg randomNumbers;
+
+    public BoosterService(@Value("${chance.common}") int commonChance,
+                          CardRepository cardRepository,
+                          CollectionRepository collectionRepository,
+                          UserRepository userRepository,
+                          BoosterRepository boosterRepository,
+                          AuditLogRepository auditLogRepository,
+                          RandomOrg randomNumbers) {
+        this.commonChance = commonChance;
+        this.cardRepository = cardRepository;
+        this.collectionRepository = collectionRepository;
+        this.userRepository = userRepository;
+        this.boosterRepository = boosterRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.randomNumbers = randomNumbers;
+    }
+
+    @Transactional
+    public List<CardResponse> buyBooster(BuyBoosterRequest request, Integer userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found!"));
+
+        Integer boosterId =  request.getBoosterId();
+        Booster booster = boosterRepository.findById(boosterId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booster not found!"));
+
+        if (user.getGold() < booster.getPrice()) {
+            throw new ResponseStatusException(
+                    HttpStatus.PAYMENT_REQUIRED,
+                    "Not enough gold to buy this booster!"
+            );
+        }
+
+        user.setGold(user.getGold() - booster.getPrice());
+
+        List<Card> boosterCards = openBooster(boosterId);
+        List<CardResponse> cardResponses = new ArrayList<>();
+
+        for (Card card : boosterCards) {
+            Optional<Colection> existing = collectionRepository.findByUserAndCard(user, card);
+            CardResponse b_card = new CardResponse(card.getId(), card.getName());
+
+            if (existing.isPresent()) {
+                Colection c = existing.get();
+                c.setQuantity(c.getQuantity() + 1);
+            } else {
+                Colection c = Colection.builder()
+                        .user(user)
+                        .card(card)
+                        .quantity(1)
+                        .inPackage(0)
+                        .build();
+                collectionRepository.save(c);
+                //b_card.setName(card.getName() + " NEW");
+            }
+
+            cardResponses.add(b_card);
+        }
+
+        String cardList = cardResponses.stream()
+                .map(c -> c.getName() + " (ID= " + c.getId() + ")")
+                .collect(Collectors.joining(", "));
+
+        String details = "Bought cards: " + cardList +
+                "; Booster: " + booster.getName() +
+                "; Price: " + booster.getPrice() + " gold";
+
+        AuditLog auditLog = new AuditLog();
+        auditLog.setActorUser(user);
+        auditLog.setActorUsername(user.getUsername());
+        auditLog.setAction(AuditAction.BOOSTER_BUY);
+        auditLog.setDetails(details);
+        auditLogRepository.save(auditLog);
+
+        return cardResponses;
+    }
+
+    // helper function for random selection
+    private Card popRandom(List<Card> cards) {
+        int idx = randomNumbers.getRandomNumber(0, cards.size());
+        return cards.remove(idx);
+    }
+
+    public List<Card> openBooster(Integer boosterId) {
+        // generate booster
+        List<Card> booster = new ArrayList<>();
+
+        List<Card> commons = new ArrayList<>(cardRepository.findAllByBoosterIdAndRarityId(boosterId, 1));
+        List<Card> uncommons = new ArrayList<>(cardRepository.findAllByBoosterIdAndRarityId(boosterId, 2));
+        List<Card> rares = new ArrayList<>(cardRepository.findAllByBoosterIdAndRarityId(boosterId, 3));
+        List<Card> veryRares = new ArrayList<>(cardRepository.findAllByBoosterIdAndRarityId(boosterId, 4));
+        List<Card> superRares = new ArrayList<>(cardRepository.findAllByBoosterIdAndRarityId(boosterId, 5));
+
+        // 2 commons are guaranteed
+        // 1 more common - depends on commonChance
+        booster.add(popRandom(commons));
+        booster.add(popRandom(commons));
+        int roll = randomNumbers.getRandomNumber(1, 1000);
+        if (roll < commonChance) {
+            booster.add(popRandom(commons));
+        }
+
+        // 2 uncommon are guaranteed
+        booster.add(popRandom(uncommons));
+        booster.add(popRandom(uncommons));
+
+        // 1 rare is guaranteed
+        booster.add(popRandom(rares));
+
+        // 1 very rare or super rare if the 3rd common is not
+        if (roll >= commonChance) {
+            boolean superRare = ThreadLocalRandom.current().nextBoolean();
+            booster.add(superRare && !superRares.isEmpty() ? popRandom(superRares) : popRandom(veryRares));
+        }
+
+        return booster;
+    }
+}
