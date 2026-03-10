@@ -22,5 +22,4 @@ public interface DeckCardRepository extends JpaRepository<DeckCard, DeckCardId> 
                                     @Param("cardId") Integer cardId,
                                     @Param("currentDeckId") Integer deckId);
 
-    void deleteByDeck(Deck deck);
 }

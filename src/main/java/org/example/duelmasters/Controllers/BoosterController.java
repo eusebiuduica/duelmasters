@@ -1,16 +1,14 @@
 package org.example.duelmasters.Controllers;
 
 import jakarta.validation.Valid;
-import org.example.duelmasters.DTOs.BuyBoosterRequest;
-import org.example.duelmasters.DTOs.CardResponse;
+import org.example.duelmasters.DTOs.Booster.BoosterResponse;
+import org.example.duelmasters.DTOs.Booster.BuyBoosterRequest;
+import org.example.duelmasters.DTOs.Booster.BuyBoosterResponse;
 import org.example.duelmasters.Services.BoosterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -27,14 +25,16 @@ public class BoosterController {
     }
 
     @PostMapping("/buy")
-    public ResponseEntity<List<CardResponse>> buyBooster(
-            @RequestBody @Valid BuyBoosterRequest request) {
+    public ResponseEntity<BuyBoosterResponse> buyBooster(@RequestBody @Valid BuyBoosterRequest request) {
 
         Integer userId = (Integer) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-
-        List<CardResponse> response = boosterService.buyBooster(
-                request, userId);
-
+        BuyBoosterResponse response = boosterService.buyBooster(request, userId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<BoosterResponse>> allBoosters() {
+
+        return ResponseEntity.ok(boosterService.getAllBoosters());
     }
 }

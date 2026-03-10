@@ -10,4 +10,11 @@ public class CollectionResponse {
     String name;
     Integer quantity;
     Integer inPackage;
+    String image;
+    Integer civilization;
+    Integer cost;
+    Integer type;
+    Integer rarity;
+    Integer power;
+    Integer sellGold;
 }

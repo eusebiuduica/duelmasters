@@ -2,9 +2,7 @@ package org.example.duelmasters.Services;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.example.duelmasters.DTOs.CardRequest;
-import org.example.duelmasters.DTOs.CollectionFilter;
-import org.example.duelmasters.DTOs.CollectionResponse;
+import org.example.duelmasters.DTOs.*;
 import org.example.duelmasters.Models.AuditLog;
 import org.example.duelmasters.Models.Card;
 import org.example.duelmasters.Models.Colection;
@@ -19,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +29,7 @@ public class CollectionService {
     private final AuditLogRepository auditLogRepository;
 
     @Transactional
-    public User sellCards(Integer userId, List<CardRequest> cardsSell) {
+    public User sellCards(Integer userId, List<CardSellRequest> cardsSell) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -39,7 +38,7 @@ public class CollectionService {
         // 1️⃣ Aggregate quantities per cardId
         Map<Integer, Integer> aggregated = new HashMap<>();
 
-        for (CardRequest request : cardsSell) {
+        for (CardSellRequest request : cardsSell) {
 
             if (request.getQuantity() == null || request.getQuantity() <= 0) {
                 throw new ResponseStatusException(
@@ -48,7 +47,7 @@ public class CollectionService {
             }
 
             aggregated.merge(
-                    request.getCardId(),
+                    request.getId(),
                     request.getQuantity(),
                     Integer::sum
             );
@@ -58,37 +57,49 @@ public class CollectionService {
 
         StringBuilder sbAuditDetails = new StringBuilder("Sold cards: ");
 
+        Set<Integer> cardIds = aggregated.keySet();
+
+        // we get the cards ids and rarities from DB
+        List<Card> cards = cardRepository.findAllByIdWithRarity(cardIds);
+
+        // we get what cards have the user
+        List<Colection> collectionQuantities = collectionRepository.findAllByUserAndCardIn(user, cards);
+
+        // we store these details into maps to access them fast
+        Map<Integer, Card> cardMap = cards.stream()
+                .collect(Collectors.toMap(Card::getId, c -> c));
+        Map<Integer, Colection> collectionMap = collectionQuantities.stream()
+                .collect(Collectors.toMap(c -> c.getCard().getId(), c -> c));
+
         // 2️⃣ Validate and apply once per card
         for (Map.Entry<Integer, Integer> entry : aggregated.entrySet()) {
 
             Integer cardId = entry.getKey();
             Integer totalQuantity = entry.getValue();
 
-            Card card = cardRepository.findById(cardId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "Card not found with id " + cardId));
-
-            sbAuditDetails.append(card.getName())
-                    .append(" (ID= ").append(card.getId()).append(")").append(", ");
-
-            Colection c = collectionRepository.findByUserAndCard(user, card)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "User does not own this card: " + card.getName()));
-
-            if (c.getQuantity() < totalQuantity) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Not enough copies of card " + card.getName() + " to sell");
+            Card card = cardMap.get(cardId);
+            if (card == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Card not found: " + cardId);
             }
 
-            // Update quantity once
-            c.setQuantity(c.getQuantity() - totalQuantity);
+            Colection collectionCard = collectionMap.get(cardId);
+            if (collectionCard == null || collectionCard.getQuantity() < totalQuantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "You do not have enough copies of card: " + card.getName()
+                );
+            }
 
-            // Calculate gold using rarity sell price
+            sbAuditDetails.append(card.getName()).append(" x ").append(totalQuantity).append(", ");
+
+            // we subtract
+            collectionCard.setQuantity(collectionCard.getQuantity() - totalQuantity);
+
+            // Gold received
             goldReceived += totalQuantity * card.getRarity().getSellGold();
         }
 
+        // here delete the end of audit card, that comma and space
         if (sbAuditDetails.length() > 2) {
             sbAuditDetails.delete(sbAuditDetails.length() - 2, sbAuditDetails.length());
         }
@@ -109,37 +120,93 @@ public class CollectionService {
         return user;
     }
 
-    public List<CollectionResponse> findAll(Integer userId, CollectionFilter filter) {
+    public List<CollectionResponse> findAll(Integer userId) {
+        // check user exists
         userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "User not found"));
 
-        String sortByDefault = "id";
-        String sortDirDefault = "asc";
-        String sortByInitial = filter.getSortBy();
-        String sortDirInitial = filter.getSortDir();
+        List<CollectionResponse> responses = collectionRepository.findAllCardsForUser(userId);
+//        // 2️⃣ get all user cards
+//        List<Colection> userCards = collectionRepository.findAllByUserId(userId);
+//        Map<Integer, Colection> userCardMap = userCards.stream()
+//                .collect(Collectors.toMap(c -> c.getCard().getId(), c -> c));
+//
+//        // 3️⃣ merge into responses
+//        List<CollectionResponse> responses = new ArrayList<>();
+//        for (Card card : allCards) {
+//            Colection col = userCardMap.get(card.getId());
+//            int quantity = col != null ? col.getQuantity() : 0;
+//            int inPackage = col != null ? col.getInPackage() : 0;
+//
+//            // optional: skip cards user never got
+//            // if(quantity + inPackage == 0) continue;
+//
+//            CollectionResponse colResp = new CollectionResponse(
+//                    card.getId(),
+//                    card.getName(),
+//                    quantity,
+//                    inPackage,
+//                    card.getImage(),
+//                    card.getCivilization().getId(),
+//                    card.getCost(),
+//                    card.getType().getId(),
+//                    card.getRarity().getId(),
+//                    card.getPower(),
+//                    card.getRarity().getSellGold()
+//            );
+//            responses.add(colResp);
+//        }
 
-        String sortByFinal = (sortByInitial != null && Set.of("mana", "power", "cost", "id").contains(sortByInitial))
-                ? sortByInitial
-                : sortByDefault;
+        return responses;
 
-        String sortDirFinal = (sortDirInitial != null && Set.of("asc", "desc").contains(sortDirInitial.toLowerCase()))
-                ? sortDirInitial.toLowerCase()
-                : sortDirDefault;
+        // here it was db filter - we can use for later
+//        String sortByDefault = "id";
+//        String sortDirDefault = "asc";
+//        String sortByInitial = filter.getSortBy();
+//        String sortDirInitial = filter.getSortDir();
+//
+//        String sortByFinal = (sortByInitial != null && Set.of("mana", "power", "cost", "id").contains(sortByInitial))
+//                ? sortByInitial
+//                : sortByDefault;
+//
+//        String sortDirFinal = (sortDirInitial != null && Set.of("asc", "desc").contains(sortDirInitial.toLowerCase()))
+//                ? sortDirInitial.toLowerCase()
+//                : sortDirDefault;
+//
+//        //Pageable pageable = PageRequest.of(100, filter.getPageSize());
+//
+//        return collectionRepository.findUserCollection(
+//                userId,
+//                filter.getCivilization(),
+//                filter.getRarity(),
+//                filter.getType(),
+//                filter.getCost(),
+//                //filter.getManaMax(),
+//                filter.getPower(),
+//                //filter.getPowerMax(),
+//                sortByFinal,
+//                sortDirFinal);
+    }
 
-        //Pageable pageable = PageRequest.of(100, filter.getPageSize());
+    public List<CardSellResponse> findAllCardsForSell(int userId)
+    {
 
-        return collectionRepository.findUserCollection(
-                userId,
-                filter.getCivilization(),
-                filter.getRarity(),
-                filter.getType(),
-                filter.getManaMin(),
-                filter.getManaMax(),
-                filter.getPowerMin(),
-                filter.getPowerMax(),
-                sortByFinal,
-                sortDirFinal);
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        return collectionRepository.findUserCollectionToSell(userId);
+    }
+
+    public List<CardForDeckResponse> findAllCardDetails(int userId)
+    {
+
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        return collectionRepository.findAllCardDetails(userId);
     }
 }
 

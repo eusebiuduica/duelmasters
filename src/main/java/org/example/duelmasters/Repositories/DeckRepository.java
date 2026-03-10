@@ -1,6 +1,5 @@
 package org.example.duelmasters.Repositories;
 
-import org.example.duelmasters.DTOs.DeckResponse;
 import org.example.duelmasters.Models.Deck;
 import org.example.duelmasters.Models.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,4 +15,5 @@ public interface DeckRepository extends JpaRepository<Deck, Integer> {
 
     List<Deck> findAllByUserId(Integer userId);
 
+    void deleteAllByUserId(Integer userId);
 }

@@ -5,8 +5,10 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class CardResponse {
-
+public class CardSellResponse {
     private Integer id;
+    private String image;
+    private int quantity;
+    private int sellGold;
 }
 

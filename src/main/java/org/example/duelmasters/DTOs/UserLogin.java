@@ -8,12 +8,12 @@ import lombok.Setter;
 @Setter
 public class UserLogin {
     @NotBlank(
-            message = "Field must be not empty!"
+            message = "Username must not be empty!"
     )
     private String username;
 
     @NotBlank(
-            message = "Field must be not empty!"
+            message = "Password must not be empty!"
     )
     private String password;
 }

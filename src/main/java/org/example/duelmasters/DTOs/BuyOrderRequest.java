@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 
 @Data
 public class BuyOrderRequest {
+
     @NotNull(message = "Invalid format!")
     private Integer orderId;
 

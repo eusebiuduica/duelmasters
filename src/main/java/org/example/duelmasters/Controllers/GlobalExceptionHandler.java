@@ -10,7 +10,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -20,20 +19,25 @@ public class GlobalExceptionHandler {
 
         Map<String, Object> body = new HashMap<>();
         body.put("status", ex.getStatusCode().value());
-        body.put("error", ex.getStatusCode().toString());
-        body.put("message", ex.getReason());
+        body.put("errors", List.of(ex.getReason()));
 
         return new ResponseEntity<>(body, ex.getStatusCode());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<List<String>> handleValidationErrors(MethodArgumentNotValidException ex) {
+    public ResponseEntity<Map<String, Object>> handleValidationErrors(
+            MethodArgumentNotValidException ex) {
+
         List<String> errors = ex.getBindingResult()
                 .getAllErrors()
                 .stream()
                 .map(DefaultMessageSourceResolvable::getDefaultMessage)
                 .toList();
 
-        return ResponseEntity.badRequest().body(errors);
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("errors", errors);
+
+        return ResponseEntity.badRequest().body(body);
     }
 }

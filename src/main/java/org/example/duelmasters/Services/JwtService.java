@@ -20,8 +20,8 @@ public class JwtService {
         SecretKey key = Keys.hmacShaKeyFor(secret.getBytes());
 
         return Jwts.builder()
-                .setSubject(userId.toString())      // ✅ ID
-                .claim("username", username)    // opțional
+                .setSubject(userId.toString())
+                .claim("username", username)
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
                 .signWith(key)

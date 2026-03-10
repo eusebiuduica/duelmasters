@@ -1,5 +1,8 @@
 package org.example.duelmasters.Services;
 
+import org.example.duelmasters.DTOs.UserDetailsResponse;
+import org.example.duelmasters.DTOs.UserLoginResponse;
+import org.example.duelmasters.Infrastructure.MarketplaceSseManager;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.CardRepository;
 import org.example.duelmasters.Repositories.CivilizationRepository;
@@ -28,6 +31,7 @@ public class UserService {
     private final CivilizationRepository civilizationRepository;
     private final CardRepository cardRepository;
     private final CollectionRepository collectionRepository;
+    private final MarketplaceSseManager marketplaceSseManager;
 
     @Transactional
     public void addUser(String username, String password, Integer civilizationId) {
@@ -126,7 +130,7 @@ public class UserService {
     }
 
     @Transactional
-    public String authenticate(String username, String password) {
+    public UserLoginResponse authenticate(String username, String password) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials!"));
@@ -137,15 +141,21 @@ public class UserService {
 
         LocalDateTime nowUtc = LocalDateTime.now(ZoneOffset.UTC);
         LocalDate todayUtc = nowUtc.toLocalDate();
-
-        if (user.getLastLogin() == null || !user.getLastLogin().toLocalDate().equals(todayUtc)) {
-            // here login bonus and increment login days - once per day
-            user.setGold(user.getGold() + 10);
-            user.setLoginDays(user.getLoginDays() + 1);
-        }
+            UserLoginResponse response = new UserLoginResponse();
+            response.setDailyReward(false);
+            response.setGoldReceived(0);
+            if (user.getLastLogin() == null || !user.getLastLogin().toLocalDate().equals(todayUtc)) {
+                // here login bonus and increment login days - once per day
+                user.setGold(user.getGold() + 10);
+                user.setLoginDays(user.getLoginDays() + 1);
+                response.setDailyReward(true);
+                response.setGoldReceived(10);
+            }
+        response.setTotalGold(user.getGold());
         user.setLastLogin(nowUtc);
         userRepository.save(user);
-        return jwtService.createToken(username, user.getId());
+        response.setToken(jwtService.createToken(username, user.getId()));
+        return response;
     }
 
     public User validateUser(String token) {
@@ -165,11 +175,29 @@ public class UserService {
     public void deleteUser(Integer userId) {
         Optional<User> user = userRepository.findById(userId);
         if (user.isPresent()) {
+            for (MarketplaceOrder marketplaceOrder : user.get().getMarketplaceOrders()) {
+                marketplaceSseManager.broadcast(marketplaceOrder.getId(), "ORDER_DELETED");
+            }
             userRepository.delete(user.get());
         }
         else
         {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token!");
+        }
+    }
+
+    public UserDetailsResponse getUserDetails(int userId)
+    {
+        UserDetailsResponse response = new UserDetailsResponse();
+        Optional<User> user = userRepository.findById(userId);
+        if (user.isPresent()) {
+            response.setGold(user.get().getGold());
+            response.setUsername(user.get().getUsername());
+            return response;
+        }
+        else
+        {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found!");
         }
     }
 }

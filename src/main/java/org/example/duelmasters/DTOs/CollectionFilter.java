@@ -21,19 +21,19 @@ public class CollectionFilter {
     @Max(value = 3, message = "Invalid type!")
     private Integer type;           // optional
 
-    @Min(value = 1, message = "Mana min must be at least 1!")
-    private Integer manaMin;        // optional
+    @Min(value = 1, message = "Cost must be at least 1!")
+    private Integer cost;        // optional
 
-    @Min(value = 0, message = "Mana max must be at least 1!")
-    private Integer manaMax;        // optional
+    //@Min(value = 0, message = "Mana max must be at least 1!")
+    //private Integer manaMax;        // optional
 
-    @Min(value = 0, message = "Power min must positive!")
-    private Integer powerMin;       // optional
+    @Min(value = 0, message = "Power must positive!")
+    private Integer power;       // optional
 
-    @Min(value = 0, message = "Power max must positive!")
-    private Integer powerMax;       // optional
+    //@Min(value = 0, message = "Power max must positive!")
+    //private Integer powerMax;       // optional
 
-    private String sortBy;          // mana / power / id
+    private String sortBy;          // mana / power / id - default
     private String sortDir;         // asc / desc
 }
 

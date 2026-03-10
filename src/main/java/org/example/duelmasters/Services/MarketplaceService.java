@@ -2,7 +2,10 @@ package org.example.duelmasters.Services;
 
 import lombok.RequiredArgsConstructor;
 import org.example.duelmasters.DTOs.BuyOrderRequest;
+import org.example.duelmasters.DTOs.MarketPlaceResponse;
 import org.example.duelmasters.DTOs.MarketplaceOrderRequest;
+import org.example.duelmasters.DTOs.OrderUpdateEvent;
+import org.example.duelmasters.Infrastructure.MarketplaceSseManager;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.*;
 import org.example.duelmasters.Utils.AuditAction;
@@ -10,7 +13,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -22,9 +28,10 @@ public class MarketplaceService {
     private final CollectionRepository collectionRepository;
     private final MarketplaceOrderRepository marketplaceOrderRepository;
     private final AuditLogRepository auditLogRepository;
+    private final MarketplaceSseManager marketplaceSseManager;
 
     @Transactional
-    public void addOrder(MarketplaceOrderRequest request, Integer userId) {
+    public MarketPlaceResponse addOrder(MarketplaceOrderRequest request, Integer userId) {
 
         if (request.getQuantity() == null || request.getQuantity() <= 0) {
             throw new ResponseStatusException(
@@ -68,34 +75,38 @@ public class MarketplaceService {
                 .build();
 
         marketplaceOrderRepository.save(order);
+
+        MarketPlaceResponse response = new MarketPlaceResponse(order.getId(), card.getId(), user.getUsername(), order.getQuantity(), order.getPrice(), card.getImage());
+        marketplaceSseManager.broadcast(response, "PRODUCT_ADDED");
+        return response;
     }
 
     @Transactional
-    public void buyOrder(BuyOrderRequest request, Integer userId) {
+    public Integer buyOrder(BuyOrderRequest request, Integer userId) {
 
         User buyer = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "User not found"));
+                        HttpStatus.NOT_FOUND, "User not found!"));
 
         MarketplaceOrder order = marketplaceOrderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Order not found"));
+                        HttpStatus.NOT_FOUND, "Order not found!"));
 
         if (order.getUser().getId().equals(buyer.getId())) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Cannot buy your own order");
+                    HttpStatus.BAD_REQUEST, "Cannot buy your own order!");
         }
 
         if (request.getQuantity() <= 0 || request.getQuantity() > order.getQuantity()) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Invalid quantity requested");
+                    HttpStatus.BAD_REQUEST, "Invalid quantity requested!");
         }
 
         int totalPrice = request.getQuantity() * order.getPrice();
 
         if (buyer.getGold() < totalPrice) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Not enough gold");
+                    HttpStatus.BAD_REQUEST, "Not enough gold!");
         }
 
         // Deduct gold from buyer
@@ -122,11 +133,25 @@ public class MarketplaceService {
 
         // Reduce quantity in marketplace
         order.setQuantity(order.getQuantity() - request.getQuantity());
+
+        StringBuilder sbInfo = new StringBuilder("Sold - [");
+        sbInfo.append(order.getCard().getName())
+                .append("] x").append(request.getQuantity()).append(" copies for ")
+                .append(totalPrice).append(" gold");
+
         if (order.getQuantity() == 0) {
             marketplaceOrderRepository.delete(order);
+            marketplaceSseManager.broadcast(order.getId(), "ORDER_DELETED");
         } else {
+            OrderUpdateEvent orderUpdateEvent = new OrderUpdateEvent();
+            orderUpdateEvent.setId(order.getId());
+            orderUpdateEvent.setQuantity(order.getQuantity());
+
             marketplaceOrderRepository.save(order);
+            marketplaceSseManager.broadcast(orderUpdateEvent, "ORDER_UPDATED");
         }
+
+        marketplaceSseManager.notifySale(seller.getId(), sbInfo.toString(),seller.getGold());
 
         StringBuilder sbAuditDetails = new StringBuilder("Bought card from marketplace: ");
         sbAuditDetails.append(order.getCard().getName())
@@ -142,6 +167,8 @@ public class MarketplaceService {
         auditLog.setAction(AuditAction.CARD_BUY);
         auditLog.setDetails(sbAuditDetails.toString());
         auditLogRepository.save(auditLog);
+
+        return buyer.getGold();
     }
 
     @Transactional
@@ -170,5 +197,32 @@ public class MarketplaceService {
         collection.get().setQuantity(nbCards + order.getQuantity());
 
         marketplaceOrderRepository.delete(order);
+        marketplaceSseManager.broadcast(order.getId(), "ORDER_DELETED");
+    }
+
+    public List<MarketPlaceResponse> getAll()
+    {
+        List<MarketPlaceResponse> marketplaceResponseList = new ArrayList<>();
+
+        List<MarketplaceOrder> orders = marketplaceOrderRepository.findAll();
+
+        for (MarketplaceOrder order : orders) {
+
+            Card card = order.getCard();
+
+            MarketPlaceResponse response = new MarketPlaceResponse(order.getId(), card.getId(), order.getUser().getUsername(), order.getQuantity(), order.getPrice(), card.getImage());
+
+            marketplaceResponseList.add(response);
+        }
+
+        return marketplaceResponseList;
+    }
+
+    public SseEmitter addClient(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        return marketplaceSseManager.addClient(userId);
     }
 }

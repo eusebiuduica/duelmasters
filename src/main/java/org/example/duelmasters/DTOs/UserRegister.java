@@ -8,21 +8,20 @@ import lombok.Setter;
 @Setter
 public class UserRegister {
     @NotBlank(
-            message = "Username must be not empty!"
+            message = "Username must be not empty!\r\n"
     )
     private String username;
 
-    @NotBlank
     @Pattern(
             regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$",
-            message = "Password must contain uppercase, lowercase, at least one number and at least 8 characters!"
+            message = "Password must contain uppercase, lowercase, at least one number and at least 8 characters!\n"
     )
     private String password;
 
 
-    @NotNull(message = "Civilization is required!")
-    @Min(value = 1, message = "Invalid civilization!")
-    @Max(value = 5, message = "Invalid civilization!")
+    @NotNull(message = "Civilization is required!\n")
+    @Min(value = 1, message = "Invalid civilization!\n")
+    @Max(value = 5, message = "Invalid civilization!\n")
     private Integer civilization;
 
 }

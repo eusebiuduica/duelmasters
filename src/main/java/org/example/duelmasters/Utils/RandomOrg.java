@@ -8,9 +8,6 @@ import java.net.URL;
 
 @Service
 public class RandomOrg {
-    /**
-     * Fetches a single random number from Random.org
-     */
     public int getRandomNumber(int min, int max) {
         try {
             String urlString = "https://www.random.org/integers/?num=1&min=" + min +
@@ -29,7 +26,6 @@ public class RandomOrg {
             return Integer.parseInt(numberStr.trim());
 
         } catch (Exception e) {
-            //e.printStackTrace();
             // fallback to Java Random if Random.org fails
             return new java.util.Random().nextInt(max - min + 1) + min;
         }

@@ -24,6 +24,9 @@ public class Booster {
     @Column(name = "price")
     private Integer price;
 
+    @Column(name = "image")
+    private String image;
+
     @OneToMany(mappedBy = "booster")
     @JsonIgnore
     private Set<Card> cards;

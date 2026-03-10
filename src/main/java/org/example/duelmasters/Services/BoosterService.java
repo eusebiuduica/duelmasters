@@ -1,12 +1,13 @@
 package org.example.duelmasters.Services;
 
 import jakarta.transaction.Transactional;
-import org.example.duelmasters.DTOs.BuyBoosterRequest;
+import org.example.duelmasters.DTOs.Booster.BoosterResponse;
+import org.example.duelmasters.DTOs.Booster.BuyBoosterRequest;
+import org.example.duelmasters.DTOs.Booster.BuyBoosterResponse;
 import org.example.duelmasters.DTOs.CardResponse;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.*;
 import org.example.duelmasters.Utils.AuditAction;
-import org.example.duelmasters.Utils.RandomOrg;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,26 +28,23 @@ public class BoosterService {
     private final UserRepository userRepository;
     private final BoosterRepository boosterRepository;
     private final AuditLogRepository auditLogRepository;
-    private final RandomOrg randomNumbers;
 
     public BoosterService(@Value("${chance.common}") int commonChance,
                           CardRepository cardRepository,
                           CollectionRepository collectionRepository,
                           UserRepository userRepository,
                           BoosterRepository boosterRepository,
-                          AuditLogRepository auditLogRepository,
-                          RandomOrg randomNumbers) {
+                          AuditLogRepository auditLogRepository) {
         this.commonChance = commonChance;
         this.cardRepository = cardRepository;
         this.collectionRepository = collectionRepository;
         this.userRepository = userRepository;
         this.boosterRepository = boosterRepository;
         this.auditLogRepository = auditLogRepository;
-        this.randomNumbers = randomNumbers;
     }
 
     @Transactional
-    public List<CardResponse> buyBooster(BuyBoosterRequest request, Integer userId) {
+    public BuyBoosterResponse buyBooster(BuyBoosterRequest request, Integer userId) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -71,7 +69,7 @@ public class BoosterService {
 
         for (Card card : boosterCards) {
             Optional<Colection> existing = collectionRepository.findByUserAndCard(user, card);
-            CardResponse b_card = new CardResponse(card.getId(), card.getName());
+            CardResponse b_card = new CardResponse(card.getId());
 
             if (existing.isPresent()) {
                 Colection c = existing.get();
@@ -90,7 +88,7 @@ public class BoosterService {
             cardResponses.add(b_card);
         }
 
-        String cardList = cardResponses.stream()
+        String cardList = boosterCards.stream()
                 .map(c -> c.getName() + " (ID= " + c.getId() + ")")
                 .collect(Collectors.joining(", "));
 
@@ -105,16 +103,22 @@ public class BoosterService {
         auditLog.setDetails(details);
         auditLogRepository.save(auditLog);
 
-        return cardResponses;
+        BuyBoosterResponse response = new BuyBoosterResponse();
+        response.setCards(cardResponses);
+        response.setGoldLeft(user.getGold());
+
+        return response;
     }
 
     // helper function for random selection
     private Card popRandom(List<Card> cards) {
-        int idx = randomNumbers.getRandomNumber(0, cards.size());
+
+        int idx = ThreadLocalRandom.current().nextInt(0, cards.size());
         return cards.remove(idx);
     }
 
     public List<Card> openBooster(Integer boosterId) {
+
         // generate booster
         List<Card> booster = new ArrayList<>();
 
@@ -128,7 +132,7 @@ public class BoosterService {
         // 1 more common - depends on commonChance
         booster.add(popRandom(commons));
         booster.add(popRandom(commons));
-        int roll = randomNumbers.getRandomNumber(1, 1000);
+        int roll = ThreadLocalRandom.current().nextInt(1, 1000);
         if (roll < commonChance) {
             booster.add(popRandom(commons));
         }
@@ -147,5 +151,20 @@ public class BoosterService {
         }
 
         return booster;
+    }
+
+    public List<BoosterResponse> getAllBoosters() {
+
+        return boosterRepository.findAll()
+                .stream()
+                .map(booster -> {
+                    BoosterResponse dto = new BoosterResponse();
+                    dto.setId(booster.getId());
+                    dto.setName(booster.getName());
+                    dto.setPrice(booster.getPrice());
+                    dto.setImage(booster.getImage());
+                    return dto;
+                })
+                .toList();
     }
 }
