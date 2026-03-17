@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class MarketplaceSseManager {
+public class AllSseManager {
     private final Map<Integer, SseEmitter> emitters = new ConcurrentHashMap();
 
     public SseEmitter addClient(Integer userId) {
@@ -30,13 +30,13 @@ public class MarketplaceSseManager {
                         .name(eventName)
                         .data(data));
             } catch (Exception e) {
-                emitters.remove(entry.getKey()); // curăță emitter-ul mort
+                emitters.remove(entry.getKey()); // delete the closed connection
             }
         }
     }
 
 
-    // notifică doar vânzătorul
+    // we notify only the seller
     public void notifySale(Integer sellerId, String info, Integer totalGold) {
         SseEmitter emitter = emitters.get(sellerId);
         if (emitter != null) {

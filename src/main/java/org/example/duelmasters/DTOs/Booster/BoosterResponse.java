@@ -11,4 +11,5 @@ public class BoosterResponse {
     private String name;
     private int price;
     private String image;
+    private Integer quantity;
 }

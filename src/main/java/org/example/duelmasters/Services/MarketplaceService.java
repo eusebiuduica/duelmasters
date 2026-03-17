@@ -5,7 +5,7 @@ import org.example.duelmasters.DTOs.BuyOrderRequest;
 import org.example.duelmasters.DTOs.MarketPlaceResponse;
 import org.example.duelmasters.DTOs.MarketplaceOrderRequest;
 import org.example.duelmasters.DTOs.OrderUpdateEvent;
-import org.example.duelmasters.Infrastructure.MarketplaceSseManager;
+import org.example.duelmasters.Infrastructure.AllSseManager;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.*;
 import org.example.duelmasters.Utils.AuditAction;
@@ -28,7 +28,7 @@ public class MarketplaceService {
     private final CollectionRepository collectionRepository;
     private final MarketplaceOrderRepository marketplaceOrderRepository;
     private final AuditLogRepository auditLogRepository;
-    private final MarketplaceSseManager marketplaceSseManager;
+    private final AllSseManager sseManager;
 
     @Transactional
     public MarketPlaceResponse addOrder(MarketplaceOrderRequest request, Integer userId) {
@@ -77,7 +77,7 @@ public class MarketplaceService {
         marketplaceOrderRepository.save(order);
 
         MarketPlaceResponse response = new MarketPlaceResponse(order.getId(), card.getId(), user.getUsername(), order.getQuantity(), order.getPrice(), card.getImage());
-        marketplaceSseManager.broadcast(response, "PRODUCT_ADDED");
+        sseManager.broadcast(response, "PRODUCT_ADDED");
         return response;
     }
 
@@ -141,17 +141,17 @@ public class MarketplaceService {
 
         if (order.getQuantity() == 0) {
             marketplaceOrderRepository.delete(order);
-            marketplaceSseManager.broadcast(order.getId(), "ORDER_DELETED");
+            sseManager.broadcast(order.getId(), "ORDER_DELETED");
         } else {
             OrderUpdateEvent orderUpdateEvent = new OrderUpdateEvent();
             orderUpdateEvent.setId(order.getId());
             orderUpdateEvent.setQuantity(order.getQuantity());
 
             marketplaceOrderRepository.save(order);
-            marketplaceSseManager.broadcast(orderUpdateEvent, "ORDER_UPDATED");
+            sseManager.broadcast(orderUpdateEvent, "ORDER_UPDATED");
         }
 
-        marketplaceSseManager.notifySale(seller.getId(), sbInfo.toString(),seller.getGold());
+        sseManager.notifySale(seller.getId(), sbInfo.toString(),seller.getGold());
 
         StringBuilder sbAuditDetails = new StringBuilder("Bought card from marketplace: ");
         sbAuditDetails.append(order.getCard().getName())
@@ -197,7 +197,7 @@ public class MarketplaceService {
         collection.get().setQuantity(nbCards + order.getQuantity());
 
         marketplaceOrderRepository.delete(order);
-        marketplaceSseManager.broadcast(order.getId(), "ORDER_DELETED");
+        sseManager.broadcast(order.getId(), "ORDER_DELETED");
     }
 
     public List<MarketPlaceResponse> getAll()
@@ -223,6 +223,6 @@ public class MarketplaceService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "User not found"));
 
-        return marketplaceSseManager.addClient(userId);
+        return sseManager.addClient(userId);
     }
 }

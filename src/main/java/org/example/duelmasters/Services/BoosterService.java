@@ -5,6 +5,7 @@ import org.example.duelmasters.DTOs.Booster.BoosterResponse;
 import org.example.duelmasters.DTOs.Booster.BuyBoosterRequest;
 import org.example.duelmasters.DTOs.Booster.BuyBoosterResponse;
 import org.example.duelmasters.DTOs.CardResponse;
+import org.example.duelmasters.Infrastructure.AllSseManager;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.*;
 import org.example.duelmasters.Utils.AuditAction;
@@ -28,19 +29,22 @@ public class BoosterService {
     private final UserRepository userRepository;
     private final BoosterRepository boosterRepository;
     private final AuditLogRepository auditLogRepository;
+    private final AllSseManager sseManager;
 
     public BoosterService(@Value("${chance.common}") int commonChance,
                           CardRepository cardRepository,
                           CollectionRepository collectionRepository,
                           UserRepository userRepository,
                           BoosterRepository boosterRepository,
-                          AuditLogRepository auditLogRepository) {
+                          AuditLogRepository auditLogRepository,
+                          AllSseManager sseManager) {
         this.commonChance = commonChance;
         this.cardRepository = cardRepository;
         this.collectionRepository = collectionRepository;
         this.userRepository = userRepository;
         this.boosterRepository = boosterRepository;
         this.auditLogRepository = auditLogRepository;
+        this.sseManager = sseManager;
     }
 
     @Transactional
@@ -54,6 +58,13 @@ public class BoosterService {
         Booster booster = boosterRepository.findById(boosterId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Booster not found!"));
+
+        if (booster.getQuantity() < 1){
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "There are no more boosters to buy!"
+            );
+        }
 
         if (user.getGold() < booster.getPrice()) {
             throw new ResponseStatusException(
@@ -107,6 +118,11 @@ public class BoosterService {
         response.setCards(cardResponses);
         response.setGoldLeft(user.getGold());
 
+        booster.setQuantity(booster.getQuantity() - 1);
+        BoosterResponse  boosterResponse = new BoosterResponse();
+        boosterResponse.setQuantity(booster.getQuantity());
+        boosterResponse.setId(boosterId - 1);
+        sseManager.broadcast(boosterResponse, "BOOSTER_BOUGHT");
         return response;
     }
 
@@ -163,6 +179,7 @@ public class BoosterService {
                     dto.setName(booster.getName());
                     dto.setPrice(booster.getPrice());
                     dto.setImage(booster.getImage());
+                    dto.setQuantity(booster.getQuantity());
                     return dto;
                 })
                 .toList();

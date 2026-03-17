@@ -2,7 +2,7 @@ package org.example.duelmasters.Services;
 
 import org.example.duelmasters.DTOs.UserDetailsResponse;
 import org.example.duelmasters.DTOs.UserLoginResponse;
-import org.example.duelmasters.Infrastructure.MarketplaceSseManager;
+import org.example.duelmasters.Infrastructure.AllSseManager;
 import org.example.duelmasters.Models.*;
 import org.example.duelmasters.Repositories.CardRepository;
 import org.example.duelmasters.Repositories.CivilizationRepository;
@@ -31,7 +31,7 @@ public class UserService {
     private final CivilizationRepository civilizationRepository;
     private final CardRepository cardRepository;
     private final CollectionRepository collectionRepository;
-    private final MarketplaceSseManager marketplaceSseManager;
+    private final AllSseManager marketplaceSseManager;
 
     @Transactional
     public void addUser(String username, String password, Integer civilizationId) {

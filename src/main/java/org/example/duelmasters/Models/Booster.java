@@ -1,7 +1,6 @@
 package org.example.duelmasters.Models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.Data;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -26,6 +25,9 @@ public class Booster {
 
     @Column(name = "image")
     private String image;
+
+    @Column(name = "quantity")
+    private Integer quantity;
 
     @OneToMany(mappedBy = "booster")
     @JsonIgnore
