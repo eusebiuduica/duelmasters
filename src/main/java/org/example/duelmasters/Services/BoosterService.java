@@ -184,4 +184,16 @@ public class BoosterService {
                 })
                 .toList();
     }
+
+    public List<Booster> resetAllQuantities() {
+        List<Booster> boosters = boosterRepository.findAll();
+
+        for (Booster b : boosters) {
+            b.setQuantity(10);
+        }
+
+        boosterRepository.saveAll(boosters); // save updated quantities
+
+        return boosters; // return list to frontend or log
+    }
 }
