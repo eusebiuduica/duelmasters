@@ -51,7 +51,8 @@ public class UserService {
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-
+        user.setCurrentNbDecks(0);
+        user.setMaxNbDecks(2);
         user.setCivilization(civ);
         user.setLastLogin(LocalDateTime.now(ZoneOffset.UTC));
         userRepository.save(user);
@@ -193,11 +194,33 @@ public class UserService {
         if (user.isPresent()) {
             response.setGold(user.get().getGold());
             response.setUsername(user.get().getUsername());
+            response.setCurrentNbDecks(user.get().getCurrentNbDecks());
+            response.setMaxNbDecks(user.get().getMaxNbDecks());
             return response;
         }
         else
         {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found!");
+        }
+    }
+
+    @Transactional
+    public Integer buyDeckSlot(Integer userId)
+    {
+
+        Optional<User> user = userRepository.findById(userId);
+        if (user.isPresent()) {
+            if (user.get().getGold() < 10)
+            {
+                throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "Not enough gold to buy another slot!");
+            }
+            user.get().setMaxNbDecks(user.get().getMaxNbDecks() + 1);
+            user.get().setGold(user.get().getGold() - 10);
+            return user.get().getGold();
+        }
+        else
+        {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token!");
         }
     }
 }

@@ -41,6 +41,12 @@ public class User {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
+    @Column(name = "max_nb_decks")
+    private Integer maxNbDecks;
+
+    @Column(name = "current_nb_decks")
+    private Integer currentNbDecks;
+
     @ManyToOne
     @JoinColumn(name = "civilization")
     private Civilization civilization;

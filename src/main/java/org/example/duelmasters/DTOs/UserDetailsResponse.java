@@ -8,4 +8,6 @@ import lombok.Setter;
 public class UserDetailsResponse {
     private int gold;
     private String username;
+    private Integer currentNbDecks;
+    private Integer maxNbDecks;
 }

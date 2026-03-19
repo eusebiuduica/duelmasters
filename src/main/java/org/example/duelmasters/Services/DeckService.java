@@ -28,6 +28,13 @@ public class DeckService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "User not found"));
 
+        if (user.getCurrentNbDecks().equals(user.getMaxNbDecks()))
+        {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "You reached the maximum number of decks!");
+        }
+
         // 1️⃣ Check deck name uniqueness
         if (deckRepository.existsByUserAndName(user, request.getName())) {
             throw new ResponseStatusException(
@@ -149,7 +156,7 @@ public class DeckService {
 
             deckCardRepository.save(deckCard);
         }
-
+        user.setCurrentNbDecks(user.getCurrentNbDecks() + 1);
         return deck.getId();
     }
 
@@ -189,7 +196,7 @@ public class DeckService {
         }
 
         deckRepository.delete(deck);
-
+        user.setCurrentNbDecks(user.getCurrentNbDecks() - 1);
         return response;
     }
 
@@ -206,6 +213,8 @@ public class DeckService {
             colection.setQuantity(colection.getQuantity() + colection.getInPackage());
             colection.setInPackage(0);
         }
+
+        user.setCurrentNbDecks(0);
     }
 
     @Transactional
